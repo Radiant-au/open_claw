@@ -18,3 +18,5 @@ var/
 wheels/
 .env
 .venv
+sessions/
+
