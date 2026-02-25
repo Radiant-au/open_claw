@@ -4,8 +4,32 @@ from config import SESSIONS_DIR
 
 from google.genai import types
 
+
 def get_session_path(user_id):
     return os.path.join(SESSIONS_DIR, f"{user_id}.jsonl")
+
+
+def _to_jsonable(value):
+    """Recursively normalize SDK objects into plain JSON-serializable data."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, tuple):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _to_jsonable(item) for key, item in value.items()}
+
+    for attr in ("to_dict", "model_dump", "dict"):
+        fn = getattr(value, attr, None)
+        if callable(fn):
+            return _to_jsonable(fn())
+
+    if hasattr(value, "__dict__"):
+        return _to_jsonable(vars(value))
+
+    return str(value)
+
 
 def load_session(user_id):
     """Load conversation history from disk."""
@@ -18,22 +42,23 @@ def load_session(user_id):
                     messages.append(json.loads(line))
     return messages
 
+
 def append_to_session(user_id, message):
     """Append a single message (dict or Content) to the session file."""
-    if hasattr(message, "to_dict"):
-        message = message.to_dict()
+    message = _to_jsonable(message)
     path = get_session_path(user_id)
     with open(path, "a") as f:
         f.write(json.dumps(message) + "\n")
+
 
 def save_session(user_id, messages):
     """Overwrite the session file with the full message list."""
     path = get_session_path(user_id)
     with open(path, "w") as f:
         for message in messages:
-            if hasattr(message, "to_dict"):
-                message = message.to_dict()
+            message = _to_jsonable(message)
             f.write(json.dumps(message) + "\n")
+
 
 def to_gemini_contents(messages):
     """Convert stored session messages into google-genai compatible contents."""
